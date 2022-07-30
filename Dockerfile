@@ -1,12 +1,11 @@
 FROM linuxserver/transmission:latest
 
-WORKDIR /home/app
+WORKDIR /mover
 
 RUN apk update &&  \
     apk add openssh-client --no-cache
 
-COPY app/ ./
+COPY app/ /mover/
 
-RUN ["./entrypoint.sh"]
-
+RUN echo """* * * * * /mover/setup.sh""" >> /etc/crontabs/root
 

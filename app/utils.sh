@@ -1,20 +1,42 @@
 #!/bin/bash
 
-function log() {
-  prefix=""
-  message=$1
-  if [ $# -eq 3 ]; then prefix="[$1 $2] "; message=$3; fi
-  if [ $# -eq 2 ]; then prefix="[$1] "; message=$2; fi
+env_file=/mover/.env
 
-  echo -e "$(date -u) $prefix$message"
+function log() {
+  echo -e "[$(date '+%Y-%m-%d %T.000')] [MOVER] $1"
 }
 
-function env_var_is_set() {
-  if [[ ! -z `printenv $1` ]]; then return 0; else return 1; fi
+function init_env_var() {
+  if [[ -n $(printenv "$1") ]]; then
+    log "Initialized $1=$(printenv "$1")"
+    return 0;
+  else
+    if [[ -n "$2" ]]; then
+      log "Variable $1 not set, defaulting to $2";
+      export "$1"="$2"
+      return 0;
+    else
+      log "Variable $1 not set, cannot set default value";
+      return 1;
+    fi
+  fi
+}
+
+function init_env_var_to_file() {
+  if init_env_var "$1" "$2"; then echo -e "$1"="$(printenv "$1")" >> $env_file; return 0; else return 1; fi;
+}
+
+function load_env_file() {
+  export $(xargs < $env_file)
+}
+
+function load_env_var_to_array() {
+  readarray -td, "$1" <<<"$(printenv "$2"),"; unset "$1[-1]"; declare -p "$1" > /dev/null 2>&1;
+
 }
 
 function env_var_is_positive() {
-  if [[ `printenv $1` -gt 0 ]]; then return 0; else return 1; fi
+  if [[ $(printenv "$1") -gt 0 ]]; then return 0; else return 1; fi
 }
 
 function file_exists() {
