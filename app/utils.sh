@@ -27,12 +27,12 @@ function init_env_var_to_file() {
 }
 
 function load_env_file() {
+  # shellcheck disable=SC2046
   export $(xargs < $env_file)
 }
 
 function load_env_var_to_array() {
   readarray -td, "$1" <<<"$(printenv "$2"),"; unset "$1[-1]"; declare -p "$1" > /dev/null 2>&1;
-
 }
 
 function env_var_is_positive() {
@@ -43,7 +43,4 @@ function file_exists() {
   if [ -f "$1" ]; then return 0; else return 1; fi
 }
 
-function function_exists() {
-  declare -F "$1" > /dev/null;
-  return $?
-}
+

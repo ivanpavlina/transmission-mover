@@ -36,7 +36,8 @@ if ! file_exists "$SSH_KEY"; then log "No ssh private key found on path $SSH_KEY
 if [ "$errored" = true ]; then log "Environment initialization failed, cannot setup mover!"; env; exit 1; fi
 log "Environment initialization ok"
 
-crontab="""$CRON /mover/mover.sh"""
+# Crontab will run only one instance of mover.sh # TODO maybe kill last process and start new one?
+crontab="""$CRON pidof -x mover.sh > /dev/null && exit 0 || /mover/mover.sh"""
 echo "$crontab" >> /etc/crontabs/root
 touch /etc/crontabs/cron.update
 log  "Generated crontab [ $crontab ]"
