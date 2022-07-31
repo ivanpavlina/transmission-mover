@@ -12,8 +12,8 @@ local_transmission_root_directory=$(transmission-remote "$TRANSMISSION_LOCAL_HOS
 remote_transmission_root_directory=$(transmission-remote "$TRANSMISSION_REMOTE_HOST":"$TRANSMISSION_REMOTE_PORT" --session-info | \
                                       grep -e "^\s*Download directory:" | awk -F': ' '{print $2}' )
 
-if [ -z "$local_transmission_root_directory" ]; then log "Could not determine local root directory!!!"; exit 1; fi
-if [ -z "$remote_transmission_root_directory" ]; then log "Could not determine remote root directory!!!"; exit 1; fi
+if [ -z "$local_transmission_root_directory" ]; then log "Could not connect to local transmission $TRANSMISSION_LOCAL_HOST:$TRANSMISSION_LOCAL_PORT!"; exit 1; fi
+if [ -z "$remote_transmission_root_directory" ]; then log "Could not connect to remote transmission $TRANSMISSION_REMOTE_HOST:$TRANSMISSION_REMOTE_PORT!"; exit 1; fi
 
 log "Transmissions initialized: local>$local_transmission_root_directory remote>$remote_transmission_root_directory"
 
@@ -37,8 +37,8 @@ for line in $local_torrent_list_raw; do
   torrent_file="$TRANSMISSION_LOCAL_TORRENT_FILE_PATH"/"$hash".torrent;
 
   # Skip if torrent is stopped or incomplete
-  if [ "$state" == "Stopped" ]; then log "Torrent $name is stopped, not transferring"; continue; fi
-  if [ "$percentage" != "100%" ]; then log "Torrent $name is $percentage complete, not transferring"; continue; fi
+  if [ "$state" == "Stopped" ]; then log "DEBUG" "Torrent $name is stopped, not transferring"; continue; fi
+  if [ "$percentage" != "100%" ]; then log "DEBUG" "Torrent $name is $percentage complete, not transferring"; continue; fi
   if ! file_exists "$torrent_file"; then log "Torrent $name failed torrent file check, file not found $torrent_file"; continue; fi
 
   # sed removes first two rows
@@ -69,18 +69,16 @@ for line in $local_torrent_list_raw; do
 
     # Rsync files to remote
     log "... transferring from local $local_transmission_root_directory to remote $SSH_REMOTE_USERNAME($SSH_KEY)@$SSH_REMOTE_HOST:$SSH_REMOTE_PORT:$remote_transmission_root_directory ..."
-    if ! /usr/bin/rsync -ar --partial --files-from=$_rsync_files "$local_transmission_root_directory" \
+    if ! run_retry 3 /usr/bin/rsync -ar --partial --files-from=$_rsync_files "$local_transmission_root_directory" \
          -e "ssh -o StrictHostKeyChecking=no -i $SSH_KEY -p $SSH_REMOTE_PORT" \
          "$SSH_REMOTE_USERNAME"@"$SSH_REMOTE_HOST":"$remote_transmission_root_directory"; then
-      # TODO retry
       log "... rsync errors occurred"
       continue
     fi
     log "... successfully transferred files to remote ..."
 
     # Add torrent to remote transmission
-    if ! transmission-remote "$TRANSMISSION_REMOTE_HOST":"$TRANSMISSION_REMOTE_PORT" --add "$torrent_file"; then
-      # TODO retry
+    if ! run_retry 3 transmission-remote "$TRANSMISSION_REMOTE_HOST":"$TRANSMISSION_REMOTE_PORT" --add "$torrent_file"; then
       log "... failed adding torrent to remote transmission"
       continue
     fi

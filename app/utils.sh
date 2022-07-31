@@ -3,7 +3,11 @@
 env_file=/mover/.env
 
 function log() {
-  echo -e "[$(date '+%Y-%m-%d %T.000')] [MOVER] $1"
+  if [ $# -eq 2 ] && [ "$1" = "DEBUG" ]; then
+    if [ "$DEBUG" = true ]; then echo -e "[$(date '+%Y-%m-%d %T.000')] [MOVER] $1"; fi
+  else
+    echo -e "[$(date '+%Y-%m-%d %T.000')] [MOVER] $1";
+  fi
 }
 
 function init_env_var() {
@@ -43,4 +47,21 @@ function file_exists() {
   if [ -f "$1" ]; then return 0; else return 1; fi
 }
 
-
+function run_retry {
+  local retries=$1
+  shift
+  local count=0
+  until "$@"; do
+    exit=$?
+    wait=$((2 ** $count))
+    count=$(($count + 1))
+    if [ $count -lt $retries ]; then
+      log "    ... command run $count/$retries exited $exit, retrying in $wait seconds..."
+      sleep $wait
+    else
+      log "    ...command run Retry $count/$retries exited $exit, no more retries left."
+      return $exit
+    fi
+  done
+  return 0
+}
