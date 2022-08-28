@@ -12,10 +12,13 @@ local_transmission_root_directory=$(transmission-remote "$TRANSMISSION_LOCAL_HOS
 remote_transmission_root_directory=$(transmission-remote "$TRANSMISSION_REMOTE_HOST":"$TRANSMISSION_REMOTE_PORT" --session-info | \
                                       grep -e "^\s*Download directory:" | awk -F': ' '{print $2}' )
 
-if [ -z "$local_transmission_root_directory" ]; then log "Could not connect to local transmission $TRANSMISSION_LOCAL_HOST:$TRANSMISSION_LOCAL_PORT!"; exit 1; fi
-if [ -z "$remote_transmission_root_directory" ]; then log "Could not connect to remote transmission $TRANSMISSION_REMOTE_HOST:$TRANSMISSION_REMOTE_PORT!"; exit 1; fi
-
-log "Transmissions initialized: local>$local_transmission_root_directory remote>$remote_transmission_root_directory"
+if [ -z "$local_transmission_root_directory" ]; then
+  log "Could not connect to local transmission $TRANSMISSION_LOCAL_HOST:$TRANSMISSION_LOCAL_PORT! Cannot run.";
+  exit 1;
+fi
+if [ -z "$remote_transmission_root_directory" ]; then
+  log "Could not connect to remote transmission $TRANSMISSION_REMOTE_HOST:$TRANSMISSION_REMOTE_PORT! Running locally only.";
+fi
 
 # sed removes first and last line which are not torrent torrent_ids
 local_torrent_list_raw=$(transmission-remote "$TRANSMISSION_LOCAL_HOST":"$TRANSMISSION_LOCAL_PORT" --list | sed '1d;$d')
@@ -58,37 +61,41 @@ for line in $local_torrent_list_raw; do
     log "Torrent $name stopped locally"
 
   else
-    # Torrent has one of requested tracker, start transfer
-    log "Torrent $name ($size in $torrent_file_count files) [$torrent_file] queued for transfer ..."
+    # Torrent has one of requested tracker, start transfer if remote is available
+    if [ -z "$remote_transmission_root_directory" ]; then
+      log "Skipping transfer of $name, remote transmission not available";
+    else
+      log "Torrent $name ($size in $torrent_file_count files) [$torrent_file] queued for transfer ..."
 
-    # Build temp file with list of all torrent files for rsync
-    echo > $_rsync_files
-    for torrent_file_detail in $torrent_file_list; do
-      printf "%s\n" "$(echo "$torrent_file_detail" | awk -F' ' '{ for (i=7; i<=NF;i++) print $i }' | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >> $_rsync_files
-    done
+      # Build temp file with list of all torrent files for rsync
+      echo > $_rsync_files
+      for torrent_file_detail in $torrent_file_list; do
+        printf "%s\n" "$(echo "$torrent_file_detail" | awk -F' ' '{ for (i=7; i<=NF;i++) print $i }' | tr '\n' ' ' | sed 's/[[:space:]]*$//')" >> $_rsync_files
+      done
 
-    # Rsync files to remote
-    log "... transferring from local $local_transmission_root_directory to remote $SSH_REMOTE_USERNAME($SSH_KEY)@$SSH_REMOTE_HOST:$SSH_REMOTE_PORT:$remote_transmission_root_directory ..."
-    if ! run_retry 3 /usr/bin/rsync -ar --partial --files-from=$_rsync_files "$local_transmission_root_directory" \
-         -e "ssh -o StrictHostKeyChecking=no -i $SSH_KEY -p $SSH_REMOTE_PORT" \
-         "$SSH_REMOTE_USERNAME"@"$SSH_REMOTE_HOST":"$remote_transmission_root_directory"; then
-      log "... rsync errors occurred"
-      continue
+      # Rsync files to remote
+      log "... transferring from local $local_transmission_root_directory to remote $SSH_REMOTE_USERNAME($SSH_KEY)@$SSH_REMOTE_HOST:$SSH_REMOTE_PORT:$remote_transmission_root_directory ..."
+      if ! run_retry 3 /usr/bin/rsync -ar --partial --files-from=$_rsync_files "$local_transmission_root_directory" \
+           -e "ssh -o StrictHostKeyChecking=no -i $SSH_KEY -p $SSH_REMOTE_PORT" \
+           "$SSH_REMOTE_USERNAME"@"$SSH_REMOTE_HOST":"$remote_transmission_root_directory"; then
+        log "... rsync errors occurred"
+        continue
+      fi
+      log "... successfully transferred files to remote ..."
+
+      # Add torrent to remote transmission
+      if ! run_retry 3 transmission-remote "$TRANSMISSION_REMOTE_HOST":"$TRANSMISSION_REMOTE_PORT" --add "$torrent_file"; then
+        log "... failed adding torrent to remote transmission"
+        continue
+      fi
+      log "... successfully added torrent to remote transmission ..."
+
+      if ! transmission-remote "$TRANSMISSION_LOCAL_HOST":"$TRANSMISSION_LOCAL_PORT" --torrent "$torrent_id" --stop; then
+        log "... failed stopping torrent on local transmission"
+        continue
+      fi
+      log "... torrent stopped on local transmission"
     fi
-    log "... successfully transferred files to remote ..."
-
-    # Add torrent to remote transmission
-    if ! run_retry 3 transmission-remote "$TRANSMISSION_REMOTE_HOST":"$TRANSMISSION_REMOTE_PORT" --add "$torrent_file"; then
-      log "... failed adding torrent to remote transmission"
-      continue
-    fi
-    log "... successfully added torrent to remote transmission ..."
-
-    if ! transmission-remote "$TRANSMISSION_LOCAL_HOST":"$TRANSMISSION_LOCAL_PORT" --torrent "$torrent_id" --stop; then
-      log "... failed stopping torrent on local transmission"
-      continue
-    fi
-    log "... torrent stopped on local transmission"
   fi
 done
 export IFS=$oldIFS
