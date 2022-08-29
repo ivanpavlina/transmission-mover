@@ -67,6 +67,11 @@ for line in $local_torrent_list_raw; do
     else
       log "Torrent $name ($size in $torrent_file_count files) [$torrent_file] queued for transfer ..."
 
+      if [ -n "$OVERRIDE_REMOTE_PATH" ]; then
+        log "Overriding remote path"
+        remote_transmission_root_directory=$OVERRIDE_REMOTE_PATH
+      fi
+
       # Build temp file with list of all torrent files for rsync
       echo > $_rsync_files
       for torrent_file_detail in $torrent_file_list; do

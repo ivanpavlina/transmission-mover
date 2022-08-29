@@ -34,6 +34,9 @@ if ! env_var_is_positive SSH_REMOTE_PORT; then
   errored=true;
 fi
 
+
+if init_env_var_to_file OVERRIDE_REMOTE_PATH; then log "Overriding remote path to $OVERRIDE_REMOTE_PATH"; fi;
+
 if ! init_env_var_to_file SSH_KEY "/config/id_rsa"; then errored=true; fi;
 if ! file_exists "$SSH_KEY"; then log "No ssh private key found on path $SSH_KEY"; errored=true; else chmod 600 "$SSH_KEY"; fi;
 
