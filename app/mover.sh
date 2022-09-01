@@ -68,7 +68,7 @@ for line in $local_torrent_list_raw; do
       log "Torrent $name ($size in $torrent_file_count files) [$torrent_file] queued for transfer ..."
 
       if [ -n "$OVERRIDE_REMOTE_PATH" ]; then
-        log "Overriding remote path"
+        log "... overriding remote path"
         remote_transmission_root_directory=$OVERRIDE_REMOTE_PATH
       fi
 
