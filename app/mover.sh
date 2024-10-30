@@ -80,7 +80,7 @@ for line in $local_torrent_list_raw; do
 
       # Rsync files to remote
       log "... transferring from local $local_transmission_root_directory to remote $SSH_REMOTE_USERNAME($SSH_KEY)@$SSH_REMOTE_HOST:$SSH_REMOTE_PORT:$remote_transmission_root_directory ..."
-      if ! run_retry 3 /usr/bin/rsync -ar --partial --files-from=$_rsync_files "$local_transmission_root_directory" \
+      if ! run_retry 3 /usr/bin/rsync -ar --partial --chmod=F777,D777 --files-from=$_rsync_files "$local_transmission_root_directory" \
            -e "ssh -o StrictHostKeyChecking=no -i $SSH_KEY -p $SSH_REMOTE_PORT" \
            "$SSH_REMOTE_USERNAME"@"$SSH_REMOTE_HOST":"$remote_transmission_root_directory"; then
         log "... rsync errors occurred"
